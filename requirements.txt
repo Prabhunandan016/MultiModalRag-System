@@ -1,5 +1,11 @@
+streamlit
 youtube-transcript-api
 pymupdf
 pillow
 pytesseract
-opencv-python
+opencv-python-headless
+sentence-transformers
+chromadb
+rank-bm25
+groq
+python-dotenv
