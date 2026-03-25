@@ -2,6 +2,7 @@ import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import streamlit as st
+import tempfile
 from concurrent.futures import ThreadPoolExecutor
 
 from ingestion.youtube_loader import load_youtube_transcript
@@ -212,17 +213,19 @@ with st.sidebar:
     elif source_type == "PDF":
         pdf_file = st.file_uploader("Upload PDF", type=["pdf"])
         if pdf_file:
-            with open("temp.pdf", "wb") as f:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
                 f.write(pdf_file.read())
-            documents = load_pdf("temp.pdf")
+                tmp_path = f.name
+            documents = load_pdf(tmp_path)
             st.session_state.source_label = f"PDF · {pdf_file.name}"
 
     elif source_type == "Image":
         img_file = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"])
         if img_file:
-            with open("temp.png", "wb") as f:
+            with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
                 f.write(img_file.read())
-            documents = load_image("temp.png")
+                tmp_path = f.name
+            documents = load_image(tmp_path)
             st.session_state.source_label = f"Image · {img_file.name}"
 
     st.markdown("---")
