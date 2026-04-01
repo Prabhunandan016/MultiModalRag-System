@@ -5,7 +5,7 @@ pillow
 pytesseract
 opencv-python-headless
 sentence-transformers
-chromadb==0.6.3
+chromadb>=1.0.0
 rank-bm25
 groq
 python-dotenv
