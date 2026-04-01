@@ -6,6 +6,7 @@ pytesseract
 opencv-python-headless
 sentence-transformers==2.7.0
 chromadb==0.4.24
+pydantic==1.10.13
 rank-bm25
 groq
 python-dotenv
