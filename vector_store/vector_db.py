@@ -6,7 +6,7 @@ from ingestion.document_schema import Document
 class VectorStore:
 
     def __init__(self):
-        self.client = chromadb.EphemeralClient()
+        self.client = chromadb.Client()
 
         try:
             self.client.delete_collection("multimodal_rag_collection")
