@@ -2,11 +2,17 @@ from auth.supabase_client import get_supabase
 
 
 def sign_up(email, password):
-    sb = get_supabase()
-    res = sb.auth.sign_up({"email": email, "password": password})
-    if res.user:
-        return True, "Account created! You can now log in."
-    return False, "Sign up failed. Try again."
+    try:
+        sb = get_supabase()
+        res = sb.auth.sign_up({"email": email, "password": password})
+        if res.user:
+            return True, "Account created! You can now log in."
+        return False, "Sign up failed. Try again."
+    except Exception as e:
+        msg = str(e)
+        if "rate limit" in msg.lower() or "429" in msg:
+            return False, "Too many signups. Please wait a few minutes and try again."
+        return False, f"Sign up failed: {msg}"
 
 
 def sign_in(email, password):

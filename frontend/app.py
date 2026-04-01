@@ -204,6 +204,18 @@ for key, val in {
     if key not in st.session_state:
         st.session_state[key] = val
 
+# ── Restore session from Supabase token ──────────────────────────────────────
+if not st.session_state.user:
+    try:
+        stored = st.session_state.get("_token")
+        if stored:
+            sb = __import__("auth.supabase_client", fromlist=["get_supabase"]).get_supabase()
+            res = sb.auth.get_user(stored)
+            if res.user:
+                st.session_state.user = res.user
+    except Exception:
+        pass
+
 
 # ── Models (cached) ───────────────────────────────────────────────────────────
 @st.cache_resource
