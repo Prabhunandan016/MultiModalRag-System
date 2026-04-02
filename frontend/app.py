@@ -258,7 +258,10 @@ if not st.session_state.user:
         if st.button("Create Account", key="btn_signup"):
             if email2 and pass2:
                 ok, msg = sign_up(email2, pass2)
-                st.success(msg) if ok else st.error(msg)
+                if ok:
+                    st.success(msg)
+                else:
+                    st.error(msg)
             else:
                 st.warning("Fill in all fields.")
 
