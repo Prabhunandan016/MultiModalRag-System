@@ -29,7 +29,7 @@ def sign_up(email, password):
         if res.user:
             return True, "Account created! You can now sign in."
         return False, "Sign up failed. Please try again."
-    except Exception as e:
+    except BaseException as e:
         return False, _parse_error(e)
 
 
@@ -40,7 +40,7 @@ def sign_in(email, password):
         sb = get_supabase()
         res = sb.auth.sign_in_with_password({"email": email, "password": password})
         return res.user, res.session
-    except Exception as e:
+    except BaseException as e:
         return None, _parse_error(e)
 
 
