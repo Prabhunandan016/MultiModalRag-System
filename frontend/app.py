@@ -30,16 +30,74 @@ CSS = """
 [data-testid="stAppViewContainer"] { background: #0a0c12; color: #e2e8f0; }
 [data-testid="stSidebar"] { background: #0f1219; border-right: 1px solid #1e2433; }
 [data-testid="stHeader"] { background: transparent; }
-#MainMenu, footer { visibility: hidden; }
+#MainMenu, footer, [data-testid="stToolbar"], [data-testid="stDecoration"],
+[data-testid="stStatusWidget"], .viewerBadge_container__r5tak,
+.styles_viewerBadge__CvC9N, #stDecoration { visibility: hidden; display: none; }
 
 /* ── Auth page ── */
-.auth-wrap {
-    max-width: 420px; margin: 6rem auto; padding: 2.5rem;
-    background: #0f1219; border: 1px solid #1e2433; border-radius: 16px;
+.auth-page {
+    min-height: 100vh;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(ellipse at 60% 20%, #1e2d4a22 0%, transparent 60%),
+                radial-gradient(ellipse at 20% 80%, #8b5cf610 0%, transparent 50%),
+                #0a0c12;
 }
-.auth-logo { text-align: center; font-size: 2.5rem; margin-bottom: 0.5rem; }
-.auth-title { text-align: center; font-size: 1.4rem; font-weight: 700; color: #e2e8f0; margin-bottom: 0.3rem; }
-.auth-sub { text-align: center; font-size: 0.82rem; color: #475569; margin-bottom: 1.8rem; }
+.auth-wrap {
+    width: 100%; max-width: 400px; padding: 2.8rem 2.4rem;
+    background: #0f1219;
+    border: 1px solid #1e2433;
+    border-radius: 20px;
+    box-shadow: 0 25px 60px #00000060;
+}
+.auth-logo {
+    text-align: center; font-size: 2.8rem; margin-bottom: 0.6rem;
+    filter: drop-shadow(0 0 20px #3b82f640);
+}
+.auth-title {
+    text-align: center; font-size: 1.5rem; font-weight: 800;
+    background: linear-gradient(135deg, #e2e8f0, #94a3b8);
+    -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    margin-bottom: 0.3rem; letter-spacing: -0.02em;
+}
+.auth-sub { text-align: center; font-size: 0.82rem; color: #475569; margin-bottom: 2rem; }
+.auth-divider {
+    display: flex; align-items: center; gap: 0.8rem;
+    margin: 1.2rem 0; color: #334155; font-size: 0.72rem;
+}
+.auth-divider::before, .auth-divider::after {
+    content: ''; flex: 1; height: 1px; background: #1e2433;
+}
+
+/* hide streamlit tab borders on auth page */
+[data-testid="stTabs"] [data-baseweb="tab-list"] {
+    background: transparent !important;
+    border-bottom: 1px solid #1e2433 !important;
+    gap: 0 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab"] {
+    background: transparent !important;
+    color: #475569 !important;
+    border: none !important;
+    padding: 0.5rem 1.2rem !important;
+    font-size: 0.85rem !important;
+    font-weight: 600 !important;
+}
+[data-testid="stTabs"] [aria-selected="true"] {
+    color: #e2e8f0 !important;
+    border-bottom: 2px solid #3b82f6 !important;
+}
+[data-testid="stTabs"] [data-baseweb="tab-panel"] {
+    background: transparent !important;
+    border: none !important;
+    padding: 1.2rem 0 0 !important;
+}
+[data-testid="stVerticalBlock"] > [data-testid="stVerticalBlockBorderWrapper"] {
+    border: none !important;
+    box-shadow: none !important;
+    background: transparent !important;
+}
 
 /* ── Brand ── */
 .brand { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0 0.8rem; }
@@ -230,16 +288,19 @@ embedder, reranker, llm = load_models()
 # ══════════════════════════════════════════════════════════════════════════════
 if not st.session_state.user:
     st.markdown("<div class='auth-wrap'>", unsafe_allow_html=True)
-    st.markdown("<div class='auth-logo'>🧠</div>", unsafe_allow_html=True)
-    st.markdown("<div class='auth-title'>MultiRAG</div>", unsafe_allow_html=True)
-    st.markdown("<div class='auth-sub'>Sign in to your account to continue</div>", unsafe_allow_html=True)
+    st.markdown("""
+    <div class='auth-logo'>🧠</div>
+    <div class='auth-title'>MultiRAG</div>
+    <div class='auth-sub'>AI-powered document intelligence</div>
+    """, unsafe_allow_html=True)
 
-    tab_login, tab_signup = st.tabs(["Sign In", "Sign Up"])
+    tab_login, tab_signup = st.tabs(["Sign In", "Create Account"])
 
     with tab_login:
-        email    = st.text_input("Email", key="li_email", placeholder="you@example.com")
-        password = st.text_input("Password", key="li_pass", type="password", placeholder="••••••••")
-        if st.button("Sign In", key="btn_login"):
+        email    = st.text_input("Email address", key="li_email", placeholder="you@example.com")
+        password = st.text_input("Password", key="li_pass", type="password", placeholder="Enter your password")
+        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+        if st.button("Sign In →", key="btn_login"):
             if email and password:
                 user, session = sign_in(email, password)
                 if user:
@@ -248,14 +309,15 @@ if not st.session_state.user:
                     st.session_state.history = fetch_history(user.id, session.access_token)
                     st.rerun()
                 else:
-                    st.error(f"Login failed: {session}")
+                    st.error(session)
             else:
-                st.warning("Enter email and password.")
+                st.warning("Please enter your email and password.")
 
     with tab_signup:
-        email2 = st.text_input("Email", key="su_email", placeholder="you@example.com")
+        email2 = st.text_input("Email address", key="su_email", placeholder="you@example.com")
         pass2  = st.text_input("Password", key="su_pass", type="password", placeholder="Min 6 characters")
-        if st.button("Create Account", key="btn_signup"):
+        st.markdown("<div style='height:0.4rem'></div>", unsafe_allow_html=True)
+        if st.button("Create Account →", key="btn_signup"):
             if email2 and pass2:
                 ok, msg = sign_up(email2, pass2)
                 if ok:
@@ -263,7 +325,12 @@ if not st.session_state.user:
                 else:
                     st.error(msg)
             else:
-                st.warning("Fill in all fields.")
+                st.warning("Please fill in all fields.")
+        st.markdown("""
+        <div style='color:#334155;font-size:0.75rem;margin-top:1rem;text-align:center'>
+            By creating an account you agree to our terms of service.
+        </div>
+        """, unsafe_allow_html=True)
 
     st.markdown("</div>", unsafe_allow_html=True)
     st.stop()
