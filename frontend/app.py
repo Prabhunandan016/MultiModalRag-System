@@ -254,10 +254,10 @@ st.markdown(CSS, unsafe_allow_html=True)
 # ── Session defaults ──────────────────────────────────────────────────────────
 for key, val in {
     "user": None, "session": None,
-    "ready": None, "dense_retriever": None, "bm25_retriever": None,
-    "doc_count": None, "source_label": None, "source_type_loaded": None,
-    "history": [], "last_answer": None, "last_query": None, "last_sources": None,
-    "last_summary": None
+    "ready": False, "dense_retriever": None, "bm25_retriever": None,
+    "doc_count": 0, "source_label": "", "source_type_loaded": None,
+    "history": [], "last_answer": "", "last_query": "", "last_sources": [],
+    "last_summary": "", "pipeline_source": ""
 }.items():
     if key not in st.session_state:
         st.session_state[key] = val
@@ -454,48 +454,75 @@ if documents:
     st.markdown("<div style='color:#334155;font-size:0.8rem;margin-bottom:0.7rem'>Instant overview before building the full pipeline</div>", unsafe_allow_html=True)
     if st.button("📋  Generate Summary"):
         with st.spinner("Generating summary..."):
-            full_text = " ".join(doc.content for doc in documents)[:6000]
-            st.session_state.last_summary = llm.client.chat.completions.create(
-                model=llm.model,
-                messages=[{"role": "user", "content": f"Provide a detailed and comprehensive summary of the following content:\n\n{full_text}"}],
-                max_tokens=1024
-            ).choices[0].message.content
+            try:
+                full_text = " ".join(doc.content for doc in documents)[:6000]
+                st.session_state.last_summary = llm.client.chat.completions.create(
+                    model=llm.model,
+                    messages=[{"role": "user", "content": f"Provide a detailed and comprehensive summary of the following content:\n\n{full_text}"}],
+                    max_tokens=1024,
+                    timeout=30,
+                ).choices[0].message.content.strip()
+            except Exception as e:
+                st.error(f"Summary failed: {e}")
     if st.session_state.last_summary:
+        import html as _html
+        safe_summary = _html.escape(st.session_state.last_summary).replace("\n", "<br>")
         st.markdown(f"""
         <div class='answer-header'><div class='answer-header-dot'></div> Summary</div>
-        <div class='summary-box'>{st.session_state.last_summary}</div>
+        <div class='summary-box'>{safe_summary}</div>
         """, unsafe_allow_html=True)
     st.markdown("<hr style='margin:1.4rem 0'>", unsafe_allow_html=True)
 
 
 # ── Pipeline ──────────────────────────────────────────────────────────────────
-if documents:
+if documents and st.session_state.pipeline_source != st.session_state.source_label:
     st.markdown("<div class='qa-label'>⚙ Indexing Pipeline</div>", unsafe_allow_html=True)
     progress    = st.progress(0)
     status_text = st.empty()
 
-    for msg, pct, fn in [
-        ("Cleaning documents...",       15, lambda: clean_documents(documents)),
-        ("Chunking into windows...",    30, None),
-        ("Generating embeddings...",    55, None),
-        ("Storing in vector database...", 75, None),
-        ("Initialising retrievers...", 90, None),
-    ]:
-        status_text.markdown(f"<span style='color:#334155;font-size:0.83rem'>{msg}</span>", unsafe_allow_html=True)
-        progress.progress(pct)
+    try:
+        status_text.markdown("<span style='color:#334155;font-size:0.83rem'>Cleaning documents...</span>", unsafe_allow_html=True)
+        progress.progress(15)
+        documents = clean_documents(documents)
 
-    documents  = clean_documents(documents)
-    documents  = chunk_documents(documents)
-    embeddings = embedder.embed_documents(documents)
-    vector_db  = VectorStore()
-    vector_db.add_documents(documents, embeddings)
-    st.session_state.dense_retriever = DenseRetriever(vector_db, embedder)
-    st.session_state.bm25_retriever  = BM25Retriever(documents)
-    st.session_state.doc_count       = len(documents)
-    st.session_state.ready           = True
+        if not documents:
+            st.error("No valid content found after cleaning. Please try a different source.")
+            st.stop()
 
-    progress.progress(100)
-    status_text.markdown("<span style='color:#4ade80;font-size:0.83rem'>✓ Pipeline ready</span>", unsafe_allow_html=True)
+        status_text.markdown("<span style='color:#334155;font-size:0.83rem'>Chunking into windows...</span>", unsafe_allow_html=True)
+        progress.progress(30)
+        documents = chunk_documents(documents)
+
+        if not documents:
+            st.error("Content was too short to process. Please try a longer source.")
+            st.stop()
+
+        status_text.markdown("<span style='color:#334155;font-size:0.83rem'>Generating embeddings...</span>", unsafe_allow_html=True)
+        progress.progress(55)
+        embeddings = embedder.embed_documents(documents)
+
+        status_text.markdown("<span style='color:#334155;font-size:0.83rem'>Storing in vector database...</span>", unsafe_allow_html=True)
+        progress.progress(75)
+        vector_db = VectorStore()
+        vector_db.add_documents(documents, embeddings)
+
+        status_text.markdown("<span style='color:#334155;font-size:0.83rem'>Initialising retrievers...</span>", unsafe_allow_html=True)
+        progress.progress(90)
+        st.session_state.dense_retriever  = DenseRetriever(vector_db, embedder)
+        st.session_state.bm25_retriever   = BM25Retriever(documents)
+        st.session_state.doc_count        = len(documents)
+        st.session_state.ready            = True
+        st.session_state.pipeline_source  = st.session_state.source_label
+        st.session_state.last_answer      = ""
+        st.session_state.last_sources     = []
+
+        progress.progress(100)
+        status_text.markdown("<span style='color:#4ade80;font-size:0.83rem'>✓ Pipeline ready — ask your question below</span>", unsafe_allow_html=True)
+
+    except Exception as e:
+        st.error(f"Pipeline failed: {e}")
+        st.stop()
+
     st.markdown("<hr style='margin:1.4rem 0'>", unsafe_allow_html=True)
 
 
@@ -521,50 +548,62 @@ if st.session_state.ready:
         ask_clicked = st.button("🔍  Get Answer")
     st.markdown("</div>", unsafe_allow_html=True)
 
-    if ask_clicked and query:
+    if ask_clicked and query and query.strip():
         with st.spinner("Retrieving context and generating answer..."):
-            with ThreadPoolExecutor(max_workers=2) as ex:
-                fd = ex.submit(st.session_state.dense_retriever.retrieve, query)
-                fb = ex.submit(st.session_state.bm25_retriever.retrieve, query)
-                dense_results = fd.result()
-                bm25_results  = fb.result()
+            try:
+                with ThreadPoolExecutor(max_workers=2) as ex:
+                    fd = ex.submit(st.session_state.dense_retriever.retrieve, query)
+                    fb = ex.submit(st.session_state.bm25_retriever.retrieve, query)
+                    dense_results = fd.result()
+                    bm25_results  = fb.result()
 
-            fused_results = reciprocal_rank_fusion([dense_results, bm25_results])
-            final_results = reranker.rerank(query, fused_results)
-            answer        = llm.generate_answer(query, final_results)
+                fused_results = reciprocal_rank_fusion([dense_results, bm25_results])
+                final_results = reranker.rerank(query, fused_results)
+                answer        = llm.generate_answer(query, final_results)
 
-        st.session_state.last_query   = query
-        st.session_state.last_answer  = answer
-        st.session_state.last_sources = final_results
-        try:
-            save_history(st.session_state.user.id, query, answer, st.session_state.source_label, st.session_state.session.access_token)
-            st.session_state.history = fetch_history(st.session_state.user.id, st.session_state.session.access_token)
-        except Exception:
-            pass
+                st.session_state.last_query   = query
+                st.session_state.last_answer  = answer
+                st.session_state.last_sources = final_results or []
+
+                session = st.session_state.get("session")
+                if session and hasattr(session, "access_token") and session.access_token:
+                    try:
+                        save_history(st.session_state.user.id, query, answer,
+                                     st.session_state.source_label, session.access_token)
+                        st.session_state.history = fetch_history(
+                            st.session_state.user.id, session.access_token)
+                    except Exception:
+                        pass
+            except Exception as e:
+                st.error(f"Failed to generate answer: {e}")
 
     # Display last answer
     if st.session_state.last_answer:
+        import html as _html
+        safe_answer = _html.escape(st.session_state.last_answer).replace("\n", "<br>")
         st.markdown(f"""
         <div class='answer-header'><div class='answer-header-dot'></div> Answer</div>
-        <div class='answer-box'>{st.session_state.last_answer}</div>
+        <div class='answer-box'>{safe_answer}</div>
         """, unsafe_allow_html=True)
 
-        with st.expander("📚 Retrieved Sources", expanded=False):
-            for i, doc in enumerate(st.session_state.last_sources, 1):
-                src   = doc.metadata.get("source", "unknown").lower()
-                extra = doc.metadata.get("page", doc.metadata.get("video_id", ""))
-                tc    = {"youtube": "type-youtube", "pdf": "type-pdf", "image": "type-image"}.get(src, "type-unknown")
-                ex_html = f"<span style='color:#334155;font-size:0.7rem'>· {extra}</span>" if extra else ""
-                st.markdown(f"""
-                <div class='source-card'>
-                    <div class='source-meta'>
-                        <div class='source-num'>{i}</div>
-                        <span class='source-type {tc}'>{src.upper()}</span>
-                        {ex_html}
+        if st.session_state.last_sources:
+            with st.expander("📚 Retrieved Sources", expanded=False):
+                for i, doc in enumerate(st.session_state.last_sources, 1):
+                    src   = doc.metadata.get("source", "unknown").lower()
+                    extra = doc.metadata.get("page", doc.metadata.get("video_id", ""))
+                    tc    = {"youtube": "type-youtube", "pdf": "type-pdf", "image": "type-image"}.get(src, "type-unknown")
+                    ex_html = f"<span style='color:#334155;font-size:0.7rem'>· {_html.escape(str(extra))}</span>" if extra else ""
+                    safe_content = _html.escape(doc.content[:350])
+                    st.markdown(f"""
+                    <div class='source-card'>
+                        <div class='source-meta'>
+                            <div class='source-num'>{i}</div>
+                            <span class='source-type {tc}'>{src.upper()}</span>
+                            {ex_html}
+                        </div>
+                        <div class='source-text'>{safe_content}{"..." if len(doc.content) > 350 else ""}</div>
                     </div>
-                    <div class='source-text'>{doc.content[:350]}{"..." if len(doc.content) > 350 else ""}</div>
-                </div>
-                """, unsafe_allow_html=True)
+                    """, unsafe_allow_html=True)
 
 else:
     st.markdown("""
