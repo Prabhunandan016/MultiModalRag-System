@@ -245,6 +245,20 @@ CSS = """
 .stProgress > div > div { background: #1d4ed8 !important; border-radius: 4px; }
 .stProgress > div { background: #1e2433 !important; border-radius: 4px; }
 
+/* ── Mobile data loader ── */
+.mobile-loader {
+    display: none;
+    background: #0f1219;
+    border: 1px solid #1e2433;
+    border-radius: 14px;
+    padding: 1.2rem 1.4rem;
+    margin-bottom: 1.4rem;
+}
+@media (max-width: 768px) {
+    .mobile-loader { display: block !important; }
+    .mobile-hint   { display: block !important; }
+}
+
 /* ── Mobile sidebar toggle arrow ── */
 [data-testid="collapsedControl"] {
     background: #3b82f6 !important;
@@ -285,17 +299,24 @@ for key, val in {
     if key not in st.session_state:
         st.session_state[key] = val
 
-# ── Restore session from Supabase token ──────────────────────────────────────
+# ── Restore session from query param token ────────────────────────────────────
 if not st.session_state.user:
     try:
-        stored = st.session_state.get("_token")
-        if stored:
-            sb = __import__("auth.supabase_client", fromlist=["get_supabase"]).get_supabase()
-            res = sb.auth.get_user(stored)
-            if res.user:
-                st.session_state.user = res.user
+        token = st.query_params.get("t")
+        if token:
+            from auth.supabase_client import get_supabase
+            sb  = get_supabase()
+            res = sb.auth.get_user(token)
+            if res and res.user:
+                # refresh session
+                refreshed = sb.auth.refresh_session(token)
+                if refreshed and refreshed.user:
+                    st.session_state.user    = refreshed.user
+                    st.session_state.session = refreshed.session
+                    st.session_state.history = fetch_history(
+                        refreshed.user.id, refreshed.session.access_token)
     except Exception:
-        pass
+        st.query_params.clear()
 
 
 # ── Models (cached) ───────────────────────────────────────────────────────────
@@ -330,6 +351,7 @@ if not st.session_state.user:
                     st.session_state.user    = user
                     st.session_state.session = session
                     st.session_state.history = fetch_history(user.id, session.access_token)
+                    st.query_params["t"] = session.refresh_token
                     st.rerun()
                 else:
                     st.error(session)
@@ -456,6 +478,7 @@ with st.sidebar:
     st.markdown("---")
     if st.button("Sign Out"):
         sign_out()
+        st.query_params.clear()
         for k in list(st.session_state.keys()):
             del st.session_state[k]
         st.rerun()
@@ -468,11 +491,6 @@ st.markdown("""
     <h1>MultiRAG</h1>
     <p>Ask questions from YouTube videos, PDFs, and Images using hybrid AI-powered retrieval</p>
 </div>
-<style>
-@media (max-width: 768px) {
-    .mobile-hint { display: block !important; }
-}
-</style>
 <div class='mobile-hint' style='display:none;text-align:center;margin:-0.5rem 0 1.5rem;'>
     <span style='background:#1e2d4a;color:#60a5fa;border:1px solid #3b82f640;
     border-radius:999px;padding:0.35rem 1rem;font-size:0.78rem;font-weight:600;'>
@@ -480,6 +498,60 @@ st.markdown("""
     </span>
 </div>
 """, unsafe_allow_html=True)
+
+# ── Mobile data loader (visible only on small screens) ───────────────────────
+st.markdown("<div class='mobile-loader'>", unsafe_allow_html=True)
+st.markdown("<div class='qa-label'>📱 Load Content</div>", unsafe_allow_html=True)
+
+mobile_source = st.selectbox(
+    "Source", ["YouTube", "PDF", "Image"],
+    key="mobile_source", label_visibility="collapsed"
+)
+
+if mobile_source == "YouTube":
+    mobile_url = st.text_input("YouTube URL", key="mobile_url",
+                               placeholder="https://youtube.com/watch?v=...",
+                               label_visibility="collapsed")
+    if st.button("▶  Load Video", key="mobile_load_yt"):
+        if mobile_url:
+            try:
+                with st.spinner("Fetching transcript..."):
+                    documents = load_youtube_transcript(mobile_url)
+                st.session_state.source_label   = f"YouTube · {mobile_url[-11:]}"
+                st.session_state.source_type_loaded = "youtube"
+                st.session_state.last_answer    = ""
+                st.session_state.last_summary   = ""
+                st.success("Loaded! Scroll down to continue.")
+            except Exception as e:
+                st.error(f"Failed: {e}")
+        else:
+            st.warning("Enter a YouTube URL first.")
+
+elif mobile_source == "PDF":
+    mobile_pdf = st.file_uploader("Upload PDF", type=["pdf"],
+                                  key="mobile_pdf", label_visibility="collapsed")
+    if mobile_pdf:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as f:
+            f.write(mobile_pdf.read()); tmp_path = f.name
+        documents = load_pdf(tmp_path)
+        st.session_state.source_label   = f"PDF · {mobile_pdf.name}"
+        st.session_state.source_type_loaded = "pdf"
+        st.session_state.last_answer    = ""
+        st.session_state.last_summary   = ""
+
+elif mobile_source == "Image":
+    mobile_img = st.file_uploader("Upload Image", type=["png", "jpg", "jpeg"],
+                                  key="mobile_img", label_visibility="collapsed")
+    if mobile_img:
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".png") as f:
+            f.write(mobile_img.read()); tmp_path = f.name
+        documents = load_image(tmp_path)
+        st.session_state.source_label   = f"Image · {mobile_img.name}"
+        st.session_state.source_type_loaded = "image"
+        st.session_state.last_answer    = ""
+        st.session_state.last_summary   = ""
+
+st.markdown("</div>", unsafe_allow_html=True)
 
 
 # ── Quick Summary ─────────────────────────────────────────────────────────────
