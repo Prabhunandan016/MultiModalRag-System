@@ -245,6 +245,29 @@ CSS = """
 .stProgress > div > div { background: #1d4ed8 !important; border-radius: 4px; }
 .stProgress > div { background: #1e2433 !important; border-radius: 4px; }
 
+/* ── Mobile sidebar toggle arrow ── */
+[data-testid="collapsedControl"] {
+    background: #3b82f6 !important;
+    border-radius: 0 8px 8px 0 !important;
+    color: #ffffff !important;
+    opacity: 1 !important;
+    visibility: visible !important;
+    display: flex !important;
+    width: 2rem !important;
+    height: 2.5rem !important;
+    align-items: center !important;
+    justify-content: center !important;
+    box-shadow: 2px 0 8px #3b82f640 !important;
+}
+[data-testid="collapsedControl"] svg {
+    fill: #ffffff !important;
+    color: #ffffff !important;
+    stroke: #ffffff !important;
+}
+[data-testid="collapsedControl"]:hover {
+    background: #2563eb !important;
+}
+
 hr { border-color: #1e2433; }
 </style>
 """
@@ -444,6 +467,17 @@ st.markdown("""
     <div class='hero-badge'>Multimodal RAG</div>
     <h1>MultiRAG</h1>
     <p>Ask questions from YouTube videos, PDFs, and Images using hybrid AI-powered retrieval</p>
+</div>
+<style>
+@media (max-width: 768px) {
+    .mobile-hint { display: block !important; }
+}
+</style>
+<div class='mobile-hint' style='display:none;text-align:center;margin:-0.5rem 0 1.5rem;'>
+    <span style='background:#1e2d4a;color:#60a5fa;border:1px solid #3b82f640;
+    border-radius:999px;padding:0.35rem 1rem;font-size:0.78rem;font-weight:600;'>
+    ← Tap the blue arrow to open menu
+    </span>
 </div>
 """, unsafe_allow_html=True)
 
